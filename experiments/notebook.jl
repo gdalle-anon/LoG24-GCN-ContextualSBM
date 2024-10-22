@@ -11,10 +11,14 @@ begin
 	Pkg.instantiate()
 
     using CairoMakie
+	using CSV
+	using DataFrames
     using DensityInterface
     using LaTeXStrings
+	using Latexify
     using LinearAlgebra
     using Oversmoothing
+	using MonteCarloMeasurements
     using PlutoUI
     using ProgressLogging
     using Random
@@ -317,7 +321,7 @@ end
 # ╔═╡ a52d2a3a-4e6a-40a9-90ab-543d3e021f60
 let
 	fig = Figure()
-	ax = Axis(fig[1:2, 1]; xlabel=L"depth $L$", ylabel=L"accuracy $a$")
+	ax = Axis(fig[1, 1]; xlabel=L"depth $L$", ylabel=L"accuracy $a$")
 
 	bands = []
 	scatters = []
@@ -332,11 +336,9 @@ let
 		val_rw, unc_rw = value.(accuracies_rw), uncertainty.(accuracies_rw)
 		val_lr, unc_lr = value.(accuracies_lr), uncertainty.(accuracies_lr)
 
-		b = band!(ax, 0:nb_layers, val_lr - unc_lr, val_lr + unc_lr, label=L"regression - $C=%$C$", alpha=0.3)
 	    s = scatterlines!(ax, 0:nb_layers, val_rw, label=L"theory - $C=%$C$", markersize=0)
 	    e = errorbars!(ax, 0:nb_layers, val_rw, unc_rw, linewidth=2)
 		
-		push!(bands, b)
 		push!(scatters, s)
 		push!(errors, e)
 		push!(C_vals, C)
@@ -347,18 +349,47 @@ let
 				(val_rw[L+1] < min(val_rw[L], val_rw[L+2]))
 			)
 		]
-		scatter!(ax, local_extrema, val_rw[local_extrema .+ 1], markersize=45, marker=:circle, alpha=0, strokecolor=:black, strokewidth=3)
-	end
-
-	for c in C_vals
-		
+		scatter!(ax, local_extrema, val_rw[local_extrema .+ 1], markersize=45, marker=:circle, alpha=0, strokewidth=2)
 	end
 
 	C_strings = [L"C = %$C" for C in C_vals]
-	Legend(fig[1, 2], scatters, C_strings, "Mixture")
-	Legend(fig[2, 2], bands, C_strings, "Regression")
+	Legend(fig[1, 2], scatters, C_strings, "Communities")
 	save(joinpath(IMG_PATH, "optimal_depth.png"), fig; px_per_unit=5)
     fig
+end
+
+# ╔═╡ 360ab58a-f233-427c-885d-6fb7179184c2
+md"""
+## Validation
+"""
+
+# ╔═╡ e75abacd-3a6e-44b3-a5ee-91cbeaccc4aa
+validation_df = let
+	df = DataFrame()
+	for expe in oscillations_experiments
+		(; C, accuracies_rw, accuracies_lr) = expe
+		row_rw = (;
+			:C => C,
+			:method => L"\text{mixtures}",
+			[Symbol(L"L=%$L") => Particles(accuracies_rw[L+1].samples) for L in 0:3]...
+		)
+		row_lr = (;
+			:C => C,
+			:method => L"\text{logistic}",
+			[Symbol(L"L=%$L") => Particles(accuracies_lr[L+1].samples) for L in 0:3]...
+		)
+		push!(df, row_rw, cols=:union)
+		push!(df, row_lr, cols=:union)
+	end
+	df
+end
+
+# ╔═╡ 747725e4-fd45-493c-bc96-54e7bedf211a
+df_str = open(joinpath(IMG_PATH, "validation.tex"), "w") do io
+	df_str = latexify(validation_df, env=:tabular)
+	df_str = replace(df_str, "±" => "\\pm")
+   	println(io, df_str)
+	df_str
 end
 
 # ╔═╡ Cell order:
@@ -390,3 +421,6 @@ end
 # ╠═539f2393-3ba8-4287-8e82-aa602e76cf01
 # ╠═9ba113e6-b1bf-4f05-a185-2b6e77f453ab
 # ╠═a52d2a3a-4e6a-40a9-90ab-543d3e021f60
+# ╟─360ab58a-f233-427c-885d-6fb7179184c2
+# ╠═e75abacd-3a6e-44b3-a5ee-91cbeaccc4aa
+# ╠═747725e4-fd45-493c-bc96-54e7bedf211a
